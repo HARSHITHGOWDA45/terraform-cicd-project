@@ -7,7 +7,6 @@ on:
   pull_request:
     branches: [main, test, dev]
 
-  workflow_dispatch:   # ✅ added manual trigger
 
 env:
   TF_LOG: INFO
