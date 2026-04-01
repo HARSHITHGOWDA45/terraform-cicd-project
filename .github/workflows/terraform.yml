@@ -2,16 +2,12 @@ name: "Terraform Multi-Env CI/CD"
 
 on:
   push:
-    branches:
-      - main
-      - test
-      - dev
+    branches: [main, test, dev]
+
   pull_request:
-    branches:
-      - main
-      - test
-      - dev
-  workflow_dispatch:   # manual trigger also
+    branches: [main, test, dev]
+
+  workflow_dispatch:   # ✅ added manual trigger
 
 env:
   TF_LOG: INFO
@@ -25,7 +21,6 @@ permissions:
 
 jobs:
   terraform-plan:
-    name: "Terraform Plan"
     runs-on: ubuntu-latest
 
     outputs:
@@ -34,25 +29,18 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: ./code/
+        working-directory: ./code/   # ✅ IMPORTANT
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.13.3
 
-      - name: Terraform Init
-        run: terraform init
-
-      - name: Terraform Format
-        run: terraform fmt -check
-
-      - name: Terraform Validate
-        run: terraform validate
+      - run: terraform init
+      - run: terraform fmt -check
+      - run: terraform validate
 
       - name: Set Environment
         id: env-vars
@@ -72,9 +60,7 @@ jobs:
             echo "TF_VAR_FILE=dev.tfvars" >> $GITHUB_ENV
           fi
 
-      - name: Select Workspace
-        run: |
-          terraform workspace select $WORKSPACE_NAME || terraform workspace new $WORKSPACE_NAME
+      - run: terraform workspace select $WORKSPACE_NAME || terraform workspace new $WORKSPACE_NAME
 
       - name: Terraform Plan
         run: terraform plan -var-file=$TF_VAR_FILE -out=tfplan
@@ -82,11 +68,10 @@ jobs:
       - name: Upload Plan Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: tfplan
-          path: tfplan
+          name: tfplan-${{ env.WORKSPACE_NAME }}
+          path: ./code/tfplan   # ✅ YOUR REQUIRED PATH
 
   terraform-apply:
-    name: "Terraform Apply"
     needs: terraform-plan
     if: github.event_name == 'push' && needs.terraform-plan.result == 'success'
     runs-on: ubuntu-latest
@@ -96,19 +81,16 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: ./code/
+        working-directory: ./code/   # ✅ IMPORTANT
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.13.3
 
-      - name: Terraform Init
-        run: terraform init
+      - run: terraform init
 
       - name: Set Environment
         run: |
@@ -124,14 +106,12 @@ jobs:
             echo "TF_VAR_FILE=dev.tfvars" >> $GITHUB_ENV
           fi
 
-      - name: Select Workspace
-        run: |
-          terraform workspace select $WORKSPACE_NAME || terraform workspace new $WORKSPACE_NAME
+      - run: terraform workspace select $WORKSPACE_NAME || terraform workspace new $WORKSPACE_NAME
 
       - name: Download Plan Artifact
         uses: actions/download-artifact@v4
         with:
-          name: tfplan
+          name: tfplan-${{ env.WORKSPACE_NAME }}
+          path: ./code/   # ✅ matches upload
 
-      - name: Terraform Apply
-        run: terraform apply -auto-approve tfplan
+      - run: terraform apply -auto-approve tfplan
