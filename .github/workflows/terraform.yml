@@ -2,13 +2,16 @@ name: "Terraform Multi-Env CI/CD"
 
 on:
   push:
-    branches: [main, test, dev]
-    paths:
-      - 'code/**'
+    branches:
+      - main
+      - test
+      - dev
   pull_request:
-    branches: [main, test, dev]
-    paths:
-      - 'code/**'
+    branches:
+      - main
+      - test
+      - dev
+  workflow_dispatch:   # manual trigger also
 
 env:
   TF_LOG: INFO
@@ -22,6 +25,7 @@ permissions:
 
 jobs:
   terraform-plan:
+    name: "Terraform Plan"
     runs-on: ubuntu-latest
 
     outputs:
@@ -33,15 +37,22 @@ jobs:
         working-directory: ./code/
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: hashicorp/setup-terraform@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.13.3
 
-      - run: terraform init
-      - run: terraform fmt -check
-      - run: terraform validate
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Format
+        run: terraform fmt -check
+
+      - name: Terraform Validate
+        run: terraform validate
 
       - name: Set Environment
         id: env-vars
@@ -61,18 +72,21 @@ jobs:
             echo "TF_VAR_FILE=dev.tfvars" >> $GITHUB_ENV
           fi
 
-      - run: terraform workspace select $WORKSPACE_NAME || terraform workspace new $WORKSPACE_NAME
+      - name: Select Workspace
+        run: |
+          terraform workspace select $WORKSPACE_NAME || terraform workspace new $WORKSPACE_NAME
 
       - name: Terraform Plan
         run: terraform plan -var-file=$TF_VAR_FILE -out=tfplan
 
-      - name: Upload Plan
+      - name: Upload Plan Artifact
         uses: actions/upload-artifact@v4
         with:
           name: tfplan
           path: tfplan
 
   terraform-apply:
+    name: "Terraform Apply"
     needs: terraform-plan
     if: github.event_name == 'push' && needs.terraform-plan.result == 'success'
     runs-on: ubuntu-latest
@@ -85,13 +99,16 @@ jobs:
         working-directory: ./code/
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: hashicorp/setup-terraform@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.13.3
 
-      - run: terraform init
+      - name: Terraform Init
+        run: terraform init
 
       - name: Set Environment
         run: |
@@ -107,11 +124,14 @@ jobs:
             echo "TF_VAR_FILE=dev.tfvars" >> $GITHUB_ENV
           fi
 
-      - run: terraform workspace select $WORKSPACE_NAME || terraform workspace new $WORKSPACE_NAME
+      - name: Select Workspace
+        run: |
+          terraform workspace select $WORKSPACE_NAME || terraform workspace new $WORKSPACE_NAME
 
-      - name: Download Plan
+      - name: Download Plan Artifact
         uses: actions/download-artifact@v4
         with:
           name: tfplan
 
-      - run: terraform apply -auto-approve tfplan
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan
